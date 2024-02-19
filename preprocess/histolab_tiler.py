@@ -1,5 +1,3 @@
-# This script creates tiles using WSI, binary mask and annotation masks.
-
 import time
 import os
 os.environ["PATH"] = "E:\\Histology\\WSIs\\vips-dev-8.11\\bin" + ";" + os.environ["PATH"]
@@ -18,7 +16,7 @@ label_map = {'Blood': "blood",
              'Cauterized':  "damage",
              'Folding': "fold",
              'Blurry': "blur",
-             'Others': "airbubble"}
+             'Others': "bubble"}
 
 initiate = time.time()
 class MyMask(BinaryMask):
@@ -36,46 +34,34 @@ class MyMask(BinaryMask):
 
 crop = False
 tile_size = (224, 224) # (256,256)
-dataset_dir = "E:\\Histology\\WSIs\\emc\\files"
-# dataset_dir = "E:\\Histology\\WSIs\\excluded"
-t_files = os.listdir(dataset_dir)
-total_wsi = [f for f in t_files if f.endswith("ndpi")] # ndpi
-print(f"Total files in {dataset_dir} directory are {len(total_wsi)}")
-# Update this based on naming convention used.
-total_masks = [f for f in t_files if f.endswith("png") and f.split("_")[-1].split(".")[0] != "thumbnail" and f.split("_")[-1].split(".")[0] != "nonartifactmask" and f.split("_")[-1].split(".")[0] != "fusedmask" and f.split("_")[-1].split(".")[0] != "binarymask"]
+fname = 'CZ219'
+dataset_dir = f"D:\\mask_from_xml\\qunatitative_test\\Inference\\{fname}"
+total_masks = [f for f in t_files if f.endswith("png") and f.split("_")[-1].split(".")[0] != "thumbnail" and f.split("_")[-1].split(".")[0] != "artifact_free" and f.split("_")[-1].split(".")[0] != "merged" and f.split("_")[-1].split(".")[0] != "tissue"]
 print(f"Total masks in {dataset_dir} directory are {len(total_masks)}")
-# blur_mask =[f for f in total_masks if f.split("_")[1].split(".")[0] == "Blurry"]
-# blood_mask = [f for f in total_masks if f.split("_")[1].split(".")[0] == "Blood"]
 count = 0
 print("#####################################################################################\n")
 print (f"Processing {dataset_dir} dataset.\n")
 
 # for mask in total_masks:
-for mask in ["CZ465.TP.I.I-9.ndpi_Blood.png"]:
+for mask in total_masks:
     start = time.time()
     fname = mask.split("_")[0]
     label = label_map[mask.split("_")[-1].split(".")[0]]
-    # curr_slide = Slide(os.path.join(dataset_dir, fname), os.path.join(dataset_dir, "Processed", fname, label)) # Create tiles by using folder name
     curr_slide = Slide(os.path.join(dataset_dir, fname), os.path.join(dataset_dir, "Processed", label), autocrop=crop)
-    # curr_slide.show()
-    # thumb = curr_slide.scaled_image(200)
     thumb = curr_slide.thumbnail
     mask_path = mask
     bin_mask = MyMask()
-    print(f"Dimensions of file {fname} at level 7: {curr_slide.level_dimensions(level=7)}.\n")
-    # out = curr_slide.locate_mask(bin_mask,scale_factor= int(64), alpha = 256, outline = "blue")
-    # plt.imshow(out);plt.axis("off");plt.show()
-    if label == "blood":
-        grid_tiles_extractor = GridTiler(tile_size=tile_size, level=7, check_tissue=True,  tissue_percent=70.0, pixel_overlap=10, prefix=f"{fname}_{label}_", suffix=".png")
+    print(f"Dimensions of file {fname} at level 7: {curr_slide.level_dimensions(level=1)}.\n")
 
-    else:
-        continue
     if not os.path.exists(os.path.join(dataset_dir, "Processed")):
         os.mkdir(os.path.join(dataset_dir, "Processed"))
         print(f"Directory Created.\n")
-        if not os.path.exists(os.path.join(dataset_dir, "Processed", label+"_20x")):
-            os.mkdir(os.path.join(dataset_dir, "Processed", label+"_20x"))
-            print(f"Directory for {label} _20x Created.\n")
+        if not os.path.exists(os.path.join(dataset_dir, "Processed", label)):
+            os.mkdir(os.path.join(dataset_dir, "Processed", label))
+            print(f"Directory for {label} Created.\n")
+    
+    grid_tiles_extractor = GridTiler(tile_size=tile_size, level=1, check_tissue=True,  tissue_percent=70.0, pixel_overlap=0, prefix=f"{fname}_{label}_", suffix=".png")
+        
 
     print(f"Creating patches for \"{label}\" label.\n")
     grid_tiles_extractor.extract(curr_slide, extraction_mask= bin_mask)
