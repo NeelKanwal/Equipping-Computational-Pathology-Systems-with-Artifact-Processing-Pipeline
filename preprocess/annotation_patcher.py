@@ -1,6 +1,12 @@
 import time
 import os
 os.environ["PATH"] = "E:\\Histology\\WSIs\\vips-dev-8.11\\bin" + ";" + os.environ["PATH"]
+
+os.environ["PATH"] = "/path_to/openslide-win64-20171122/bin/" + ";" + os.environ["PATH"]
+# os.environ["PATH"] = "E:\\Histology\\WSIs\\vips-dev-8.11\\bin" + ";" + os.environ["PATH"]
+os.environ["PATH"] = "/path_to/full_artifact_pipeline/vips-dev-8.11/bin/" + ";" + os.environ["PATH"]
+
+
 import pyvips as vips
 import openslide
 print("Pyips: ", vips.__version__)
@@ -59,7 +65,7 @@ def extract_and_save_patch(y_cord, file_path, file_name, mask_path,
             patch.write_to_file(os.path.join(patch_folder, base_name))
 
 def create_patches(location, file, mask_path, label,
-                   workers=1, patch_size=224, mask_overlap=70.0):
+                   workers=32, patch_size=224, mask_overlap=70.0):
 
     print(f"Creating patches for {label}, using {workers} CPU out of {mp.cpu_count()}")
     file_path = os.path.join(location, file)
@@ -84,8 +90,8 @@ def create_patches(location, file, mask_path, label,
     print(f"Patches created for {file} with {label} label in {minutes:.2f} minutes.")
 
 tile_size = (224, 224) 
-fname = 'CZ565'
-dataset_dir = f"/nfs/student/neel/full_artifact_pipeline/new_WSIs/Inference/{fname}/"
+fname = 'INC_SM_0141'
+dataset_dir = f"/path_to/new_WSIs/Inference/{fname}/"
 t_files = os.listdir(dataset_dir)
 print("Total masks", len(t_files))
 total_masks = [f for f in t_files if f.endswith("png") and f.split("_")[-1].split(".")[0] != "thumbnail" and f.split("_")[-1].split(".")[0] != "merged" and f.split("_")[-1].split(".")[0] != "tissue"]
@@ -109,7 +115,7 @@ for mask in total_masks:
         os.mkdir(sav_loc)
         print(f"Directory for {label} Created.\n")
 
-    create_patches(dataset_dir, fname+".mrxs", mask_path, label, workers=40)
+    create_patches(dataset_dir, fname+".tif", mask_path, label, workers=40)
     count += 1
 
 

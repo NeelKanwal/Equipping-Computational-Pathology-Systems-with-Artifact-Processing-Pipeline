@@ -24,9 +24,9 @@ def sav_fig(path, img, sav_name, cmap="RGB"):
     plt.savefig(os.path.join(path, f"{sav_name}.png"), bbox_inches='tight', pad_inches=0)
 
 
-def merge_masks(path, image_name, listofmasks):
+def merge_masks(path, image_name, listofmasks_):
     # listofmasks = os.listdir(path)
-    listofmasks_ = [f for f in listofmasks if f.endswith("png") and not (f.endswith("tissue.png") or f.endswith("merged.png") or f.endswith("thumbnail.png"))]
+    
     shape = Image.open(os.path.join(path, listofmasks_[0])).size
     output_mask = np.full((shape[1], shape[0]), False)
     for img in listofmasks_:
@@ -39,20 +39,23 @@ def merge_masks(path, image_name, listofmasks):
     merged_mask = Image.fromarray(merged_mask.astype(np.uint8))
     sav_fig(path, merged_mask ,sav_name=f"{image_name}_merged", cmap='gray')
 
-sav_dir = "D:\\mask_from_xml\\qunatitative_test\\Inference\\CZ219"
+# sav_dir = "D:\\mask_from_xml\\qunatitative_test\\Inference\\s6"
+sav_dir = "/path_to/new_WSIs/Inference/s5/"
 directory = sav_dir
 
 t_files = os.listdir(directory)
-list_ofmasks = [f for f in t_files if f.endswith("png")]
-print(f"Total masks {len(list_ofmasks)}")
+# list_ofmasks = [f for f in t_files if f.endswith("png")]
+listofmasks_ = [f for f in t_files if f.endswith("png") and not (f.endswith("tissue.png") or f.endswith("merged.png") or f.endswith("thumbnail.png") or f.endswith("artifactfree.png"))]
+print(f"Total masks {len(listofmasks_)}")
+print(listofmasks_)
 
 
-image_mask_dict = {image_name: [mask for mask in list_ofmasks if mask.startswith(image_name)] for image_name in set(mask.split('.')[0] for mask in list_ofmasks)}
-print(image_mask_dict)
-for image_name, masks in image_mask_dict.items():
-    # print(image_name,"+", masks)
-    # Merge the masks for the current image using your merge function
-    merged_mask = merge_masks(directory,image_name,  masks)
+# image_mask_dict = {image_name: [mask for mask in list_ofmasks if mask.startswith(image_name)] for image_name in set(mask.split('.')[0] for mask in list_ofmasks)}
+# print(image_mask_dict)
+# for image_name, masks in image_mask_dict.items():
+#     # print(image_name,"+", masks)
+#     # Merge the masks for the current image using your merge function
+merge_masks(sav_dir, "s6", listofmasks_)     
 
 
 print("### FINISHED ######")

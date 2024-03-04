@@ -8,9 +8,9 @@ os.environ["PATH"] = "D:\\mask_from_xml\\openslide-win64-20171122\\bin" + ";" + 
 os.environ["PATH"] = "D:\\mask_from_xml\\vips-dev-8.11\\bin" + ";" + os.environ["PATH"]
 
 import os # Useful when running on windows.
-os.environ["PATH"] = "/nfs/student/neel/full_artifact_pipeline/openslide-win64-20171122/bin/" + ";" + os.environ["PATH"]
+os.environ["PATH"] = "/path_to/openslide-win64-20171122/bin/" + ";" + os.environ["PATH"]
 # os.environ["PATH"] = "E:\\Histology\\WSIs\\vips-dev-8.11\\bin" + ";" + os.environ["PATH"]
-os.environ["PATH"] = "/nfs/student/neel/full_artifact_pipeline/vips-dev-8.11/bin/" + ";" + os.environ["PATH"]
+os.environ["PATH"] = "/path_to/vips-dev-8.11/bin/" + ";" + os.environ["PATH"]
 
 
 import pyvips as vips
@@ -45,16 +45,14 @@ def read_vips(file_path, level=0):
     return img_400x
 
 # directory = "D:\\mask_from_xml\\qunatitative_test" # "train/"  , "validation/"  #os.getcwd()
-directory = "/nfs/student/neel/full_artifact_pipeline/new_WSIs/"
-sav_dir = "/nfs/student/neel/full_artifact_pipeline/new_WSIs/masks/"
+directory = "/path_to/full_artifact_pipeline/new_WSIs/"
+sav_dir = "/path_to/full_artifact_pipeline/new_WSIs/masks/"
 
 t_files = os.listdir(directory)
 total_wsi = [f for f in t_files if f.endswith("mrxs")]
 total_xml = [f for f in t_files if f.endswith("xml")]
-#['SUS013.xml', 'INC_SM_0141.xml', 'CZ542_TP_I1.xml', 'SUS033.xml', 
-# 'CZ565_TP_II1.xml', 'CZ219_TP_A.xml', 'SUS247.xml', 'CZ505.TP.I.I-1.xml', 'INC_SM_0168.xml']
-#'CZ542.xml', 
-for ann in ['SUS013.xml']:
+
+for ann in ['s3.xml']:
 
     with open(os.path.join(directory, ann), "r") as f:
         reducing_factor = 50

@@ -5,12 +5,14 @@ import time
 from matplotlib import pyplot as plt
 
 
-fname = "CZ542"
-dataset_dir = f"D:\\mask_from_xml\\qunatitative_test\\Inference\\{fname}"
+fname = "s6"
+dataset_dir = f"//path_to/new_WSIs/Inference/{fname}/"
+# dataset_dir = "/path_to/new_WSIs/Inference/INC_SM_0141/"
 t_files = os.listdir(dataset_dir)
 
 
 total_fusedmasks = [f for f in t_files if f.endswith("png")]
+print(total_fusedmasks)
 binarymask = [f for f in total_fusedmasks if f.split(".")[-2].split("_")[-1] == "tissue"][0]
 print(binarymask)
 binarymask_img = Image.open(os.path.join(dataset_dir, binarymask)).convert("L")
