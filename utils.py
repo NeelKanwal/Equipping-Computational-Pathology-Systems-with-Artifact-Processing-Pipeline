@@ -10,10 +10,16 @@ warnings.simplefilter(action='ignore', category=DeprecationWarning)
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 warnings.simplefilter(action='ignore', category=UserWarning)
 
+from sklearn.metrics import confusion_matrix, classification_report, average_precision_score, brier_score_loss, \
+        accuracy_score, f1_score, cohen_kappa_score, matthews_corrcoef, roc_auc_score, precision_score
+from scikitplot.metrics import plot_roc, plot_precision_recall, plot_lift_curve, plot_ks_statistic, \
+        plot_calibration_curve
+import copy
+
 import os # Useful when running on windows.
-os.environ["PATH"] = "E:\\Histology\\WSIs\\openslide-win64-20171122\\bin" + ";" + os.environ["PATH"]
-# os.environ["PATH"] = "E:\\Histology\\WSIs\\vips-dev-8.11\\bin" + ";" + os.environ["PATH"]
-os.environ["PATH"] = "E:\\Histology\\WSIs\\vips-dev-8.14\\bin" + ";" + os.environ["PATH"]
+os.environ["PATH"] = "path_to/openslide-win64-20171122/bin/" + ";" + os.environ["PATH"]
+# os.environ["PATH"] = "path_to\\vips-dev-8.11\\bin" + ";" + os.environ["PATH"]
+os.environ["PATH"] = "path_to/full_artifact_pipeline/vips-dev-8.11/bin/" + ";" + os.environ["PATH"]
 
 import pyvips as vips
 import openslide
@@ -21,9 +27,10 @@ import openslide
 # print("Openslide: ", openslide.__version__)
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import cv2
 import time
-from skimage.morphology import closing, opening, dilation, square
+from skimage.morphology import closing, opening, dilation, square, disk
 from skimage.measure import label, regionprops
 from PIL import Image
 import json
@@ -38,6 +45,34 @@ import torch.nn.functional as F
 from torch import nn
 import matplotlib.patches as mpatches
 import timm
+
+import sys
+import numpy as np
+import seaborn as sns
+from tqdm import tqdm
+import numpy as np
+import torch
+import os
+from datetime import datetime
+import torch
+import math
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix
+import torchvision.transforms as transforms
+from torchvision import datasets
+import torch.nn.functional as F
+from torch import nn
+from torch.utils.data import DataLoader
+# from pytorchtools import EarlyStopping
+# from gpytorch.variational import UnwhitenedVariationalStrategy
+from torch.autograd import Variable
+from torchvision import models
+import torch
+import torch.nn.functional as F
+from torch import nn
+import timm
+from sklearn.metrics import roc_curve, roc_auc_score
+import matplotlib
 
 import torch.multiprocessing as mp
 # mp.get_context('forkserver') # fixes problems with CUDA and fork ('forkserver')
@@ -64,12 +99,23 @@ font = {'family': 'serif',
         'size': 28}
 plt.rc('font', **font)
 
-colors = {"binary": (0.9, 0.9, 0.9),
+colors = {"tissue": (0.9, 0.9, 0.9),
           "blood": (0.99, 0, 0),
           "damage": (0, 0.5, 0.8),
           "airbubbles": (0, 0.1, 0.5),
           "fold": (0, 0.9, 0.1),
-          "blur": (0.99, 0.0, 0.50)}
+          "blur": (0.99, 0.0, 0.50),
+          "artifact": (0.3,0.5,0.8),
+          "artifactfree": (0.6,0.3,0.5)}
+
+colors_new = {"tissue": "brown",
+          "blood": "red",
+          "damage": "green",
+          "airbubbles": "yellow",
+          "fold": "cyan",
+          "blur": "blue",
+          "artifact": "purple",
+          "artifactfree": "maroon"}
 
 format_to_dtype = {
     'uchar': np.uint8,
@@ -81,8 +127,7 @@ format_to_dtype = {
     'float': np.float32,
     'double': np.float64,
     'complex': np.complex64,
-    'dpcomplex': np.complex128,
-}
+    'dpcomplex': np.complex128,}
 
 test_transform = transforms.Compose([
     transforms.CenterCrop((224, 224)),
@@ -100,9 +145,6 @@ def sav_fig(path, img, sav_name, cmap="RGB"):
     plt.savefig(os.path.join(path, f"{sav_name}.png"), bbox_inches='tight', pad_inches=0)
 
 def remove_small_regions(img, size2remove=100):
-    # Closing of the image and gather the labels of the image
-    # kernel = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]])
-    # img = closing(img, kernel)
     img = closing(img, square(2))
     label_image = label(img)
 
@@ -114,14 +156,7 @@ def remove_small_regions(img, size2remove=100):
             img[minY:maxY, minX:maxX] = 0
     return img
 
-def create_binary_mask(wsi_dir, f, sav_path, downsize = 224):
-    # using histolab
-    # curr_slide = Slide(os.path.join(location,file),os.path.join(location,file))
-    # tissue_mask = curr_slide.scaled_image(100)
-    #using openslide
-    # slide = openslide.OpenSlide(os.path.join(location,fname))
-    # (w,h) = slide.dimensions
-
+def create_binary_mask(wsi_dir, f, sav_path, downsize = 50):
     # using pyvips
     print("\n##########################################")
     print(f"Creating basic binary masks for {f}")
@@ -129,9 +164,9 @@ def create_binary_mask(wsi_dir, f, sav_path, downsize = 224):
     file_pth = os.path.join(wsi_dir, f)
     img_400x = read_vips(file_pth)
     w, h = img_400x.width, img_400x.height
-    if "#binary#mask.png" not in os.listdir(sav_path):
+    print(f"Original image width: {w}, height: {h} ")
+    if "#tissue#mask.png" not in os.listdir(sav_path):
         thumbnail = img_400x.resize(1/downsize)
-        # thumbnail = img_400x.thumbnail_image(round(w/downsize), height=round(h/downsize))
         sav_fig(sav_path, thumbnail, sav_name="#thumbnail")
         # tissue_mask = cv2.cvtColor(np.array(thumbnail), cv2.COLOR_RGBA2RGB)
         img_hsv = cv2.cvtColor(np.array(thumbnail), cv2.COLOR_RGB2HSV)
@@ -140,8 +175,10 @@ def create_binary_mask(wsi_dir, f, sav_path, downsize = 224):
         maskInv = cv2.bitwise_not(mask)
         maskInv_closed = remove_small_regions(maskInv)
         binarymask = cv2.bitwise_not(maskInv_closed)
-        sav_fig(sav_path, binarymask, sav_name="#binary#mask", cmap='gray')
-    print(f"Time taken for creating binary mask {time.time()-st:.2f} seconds")
+        binarymask_resized = cv2.resize(binarymask, (thumbnail.width, thumbnail.height))
+        sav_fig(sav_path, binarymask_resized, sav_name="#tissue#mask", cmap='gray')
+        # Image.fromarray(tissue_mask).save(f"{dataset_dir}/{fname}_binarymask.png")
+        print(f"Time taken for creating binary mask is {time.time()-st:.2f} seconds")
     return w, h
 
 def fetch(region, patch_size, x, y):
@@ -152,8 +189,6 @@ def crop(region, patch_size, x, y):
 
 def read_vips(file_path, level=0):
     if file_path.endswith("mrxs"): # mrxs are scanned with
-        #  flatten() to force RGBA to RGB, to set a white background
-        # print("MRXS file, loading file at 40x")
         try:
             img_400x = vips.Image.new_from_file(file_path, level=level+1,
                                                 autocrop=True).flatten()
@@ -182,14 +217,14 @@ def create_patches_v2(location, file, path, patch_folder, workers=1,
                    patch_size=224, mask_overlap= 95.0):
 
     global extract_and_save_patch
-    print(f"Create patches for {file}, using {workers} CPUs out of {mp.cpu_count()}")
+    print(f"Creating patches for {file}, using {workers} CPUs out of {mp.cpu_count()}")
     # "C:\files" + "/" + "wsi_files"
     file_pth = os.path.join(location, file)
     st = time.time()
     if file.endswith("mrxs"): # mrxs are scanned with
         #  flatten() to force RGBA to RGB, to set a white background
         # import pyvips as vips
-        print("MRXS file, loading file at 40x")
+        # print("MRXS file, loading file at 40x")
         try:
             img_400x = vips.Image.new_from_file(file_pth, level=1,
                                                 autocrop=True).flatten()
@@ -209,7 +244,7 @@ def create_patches_v2(location, file, path, patch_folder, workers=1,
     n_across = int(w/patch_size)
     n_down = int(h/patch_size)
     # n_across * n_down
-    mask_path = os.path.join(path, "#binary#mask.png")
+    mask_path = os.path.join(path, "#tissue#mask.png")
 
     def extract_and_save_patch(x_cord, y_cord, file_path=file_pth, file_name=file, mask_path=mask_path,
                                patch_folder=patch_folder, patch_size=patch_size, mask_overlap=mask_overlap):
@@ -286,14 +321,14 @@ def extract_and_save_patch(y_cord, file_path, file_name, mask_path,
 def create_patches(location, file, path, patch_folder,
                    workers=1, patch_size=224, mask_overlap=95.0):
 
-    print(f"Create patches for {file}, using {workers} CPU out of {mp.cpu_count()}")
+    print(f"Creating patches for {file}, using {workers} CPU out of {mp.cpu_count()}")
     file_path = os.path.join(location, file)
     st = time.time()
 
     img_400x = read_vips(file_path)
     w, h = img_400x.width, img_400x.height
     n_down = int(h/patch_size)
-    mask_path = os.path.join(path, "#binary#mask.png")
+    mask_path = os.path.join(path, "#tissue#mask.png")
 
     params = [(y, file_path, file, mask_path, patch_folder, patch_size, mask_overlap)
               for y in range(0, n_down)]
@@ -328,12 +363,6 @@ def load_vit_model(weight_loc, weights_name, num_classes=2):
     model.load_state_dict(torch.load(best_model_wts, map_location=torch.device('cpu'))['model'])
     model.eval()
     return model
-
-    # inputs = torch.randn(40, 16, 18, 260)
-    # with profiler.profile(record_shapes=True, with_flops=True) as prof:
-    #     model(inputs)
-    #     profiler_output = prof.key_averages(group_by_input_shape=True).table(sort_by="cpu_time_total", row_limit=10)
-    #     print(profiler_output)
 
 class custom_data_loader(Dataset):
     def __init__(self, img_path, transform=None):
@@ -389,8 +418,7 @@ def infer_multiclass(model, test_loader, use_prob_threshold = None):
             _, preds = torch.max(preds, 1)
         else:
             _, preds = torch.max(output, 1)
-        # probabilities = F.softmax(output, dim=1).detach().cpu().numpy()
-        probs.append(list(np.around(probabilities.detach().cpu().numpy(), decimals=5)))
+        probs.append(list(np.around(probabilities.detach().cpu().numpy(), decimals=3)))
         y_pred = preds.cpu().numpy()
 
         artifact_free.append(list((y_pred == 0).astype(int)))
@@ -425,7 +453,7 @@ def infer_cnn(model, test_loader, use_prob_threshold = None):
             _, preds = torch.max(preds, 1)
         else:
             _, preds = torch.max(output, 1)
-        probs.append(list(np.around(probabilities.detach().cpu().numpy(), decimals=5)))
+        probs.append(list(np.around(probabilities[:,1].detach().cpu().numpy(), decimals=3)))
         y_pred.append(list(preds.cpu().numpy()))
     return convert_batch_list(y_pred), convert_batch_list(probs)
 
@@ -444,79 +472,91 @@ def infer_vit(model, test_loader, use_prob_threshold = None):
             else:
                 _, preds = torch.max(output, 1)
             # probabilities = F.softmax(output, dim=1).detach().cpu().numpy()
-            probs.append(list(np.around(probabilities.detach().cpu().numpy(), decimals=3)))
+            probs.append(list(np.around(probabilities[:,1].detach().cpu().numpy(), decimals=3)))
             y_preds.append(list(preds.cpu().numpy()))
         return convert_batch_list(y_preds),  convert_batch_list(probs)
 
 def convert_batch_list(lst_of_lst):
     return sum(lst_of_lst, [])
 
-def post_process_masks(dataf, mask_saving_path, wsi_shape, downsize=224, blur=True, blood=True,
-                       damage=True, fold=True, airbubble=True, merged=True ):
+def post_process_masks(dataf, mask_saving_path, wsi_shape, downsize=50, blur=True, blood=True,
+                       damage=True, fold=True, airbubble=True, merged=True):
     # dataframe can be loaded from excel sheet instead
     # dataf = pd.read_excel(path_to_excel, engine='openpyxl')
     if blood:
         print("-----Producing masks for blood-------------")
         blood_df = dataf[dataf['blood'] == 1]
-        mask_shape = (round(wsi_shape[1]/downsize), round(wsi_shape[0]/downsize))# h,w
+        mask_shape = (round(wsi_shape[1]/downsize), round(wsi_shape[0]/downsize)) # h,w
         blood_mask = np.full(mask_shape, False)
         for name in blood_df['files'].to_list():
             # for patch naming style SUShud37_30_8064_6048.png
             x_cord = int(name.split(".")[0].split("_")[-2])
             y_cord = int(name.split(".")[0].split("_")[-1])
             blood_mask[int(y_cord/downsize), int(x_cord/downsize)] = True
-        sav_fig(mask_saving_path, Image.fromarray(blood_mask).convert("L"), sav_name="#blood#mask", cmap='gray')
+            # blood_mask = dilation(blood_mask,square(2)).astype(int) * 255
+            blood_mask = blood_mask.astype(int) * 255
+        sav_fig(mask_saving_path, Image.fromarray(blood_mask.astype(np.uint8)).convert("L"), sav_name="#blood#mask", cmap='gray')
     if blur:
         print("-----Producing masks for blur-------------")
         blur_df = dataf[dataf['blur'] == 1]
-        mask_shape = (round(wsi_shape[1]/downsize), round(wsi_shape[0]/downsize))# h,w
+        mask_shape = (round(wsi_shape[1]/downsize), round(wsi_shape[0]/downsize)) # h,w
         blur_mask = np.full(mask_shape, False)
         for name in blur_df['files'].to_list():
             # for patch naming style SUShud37_30_8064_6048.png
             x_cord = int(name.split(".")[0].split("_")[-2])
             y_cord = int(name.split(".")[0].split("_")[-1])
             blur_mask[int(y_cord/downsize), int(x_cord/downsize)] = True
-        sav_fig(mask_saving_path, Image.fromarray(blur_mask).convert("L"), sav_name="#blur#mask", cmap='gray')
+            # blur_mask = dilation(blur_mask,square(2)).astype(int) * 255
+            blur_mask = blur_mask.astype(int) * 255
+        sav_fig(mask_saving_path, Image.fromarray(blur_mask.astype(np.uint8)).convert("L"), sav_name="#blur#mask", cmap='gray')
     if damage:
         print("-----Producing masks for damaged tissue--")
         damage_df = dataf[dataf['damage'] == 1]
-        mask_shape = (round(wsi_shape[1]/downsize), round(wsi_shape[0]/downsize))# h,w
+        mask_shape = (round(wsi_shape[1]/downsize), round(wsi_shape[0]/downsize)) # h,w
         damage_mask = np.full(mask_shape, False)
         for name in damage_df['files'].to_list():
             # for patch naming style SUShud37_30_8064_6048.png
             x_cord = int(name.split(".")[0].split("_")[-2])
             y_cord = int(name.split(".")[0].split("_")[-1])
             damage_mask[int(y_cord/downsize), int(x_cord/downsize)] = True
-        sav_fig(mask_saving_path, Image.fromarray(damage_mask).convert("L"), sav_name="#damage#mask", cmap='gray')
+            # damage_mask = dilation(damage_mask,square(2)).astype(int) * 255
+            damage_mask = damage_mask.astype(int) * 255
+        sav_fig(mask_saving_path, Image.fromarray(damage_mask.astype(np.uint8)).convert("L"), sav_name="#damage#mask", cmap='gray')
     if fold:
         print("-----Producing masks for folded tissue---")
         fold_df = dataf[dataf['fold'] == 1]
-        mask_shape = (round(wsi_shape[1]/downsize), round(wsi_shape[0]/downsize))# h,w
+        mask_shape = (round(wsi_shape[1]/downsize), round(wsi_shape[0]/downsize)) # h,w
         fold_mask = np.full(mask_shape, False)
         for name in fold_df['files'].to_list():
             # for patch naming style SUShud37_30_8064_6048.png
             x_cord = int(name.split(".")[0].split("_")[-2])
             y_cord = int(name.split(".")[0].split("_")[-1])
             fold_mask[int(y_cord/downsize), int(x_cord/downsize)] = True
-        sav_fig(mask_saving_path, Image.fromarray(fold_mask).convert("L"), sav_name="#fold#mask", cmap='gray')
+            # fold_mask = dilation(fold_mask,square(2)).astype(int) * 255
+            fold_mask = fold_mask.astype(int) * 255
+        sav_fig(mask_saving_path, Image.fromarray(fold_mask.astype(np.uint8)).convert("L"), sav_name="#fold#mask", cmap='gray')
     if airbubble:
         print("-----Producing masks for airbubbles-------")
-        airbubble_df = dataf[dataf['airbubble'] == 1]
-        mask_shape = (round(wsi_shape[1]/downsize), round(wsi_shape[0]/downsize))# h,w
+        airbubble_df = dataf[dataf['bubble'] == 1]
+        mask_shape = (round(wsi_shape[1]/downsize), round(wsi_shape[0]/downsize)) # h,w
         airbubbles_mask = np.full(mask_shape, False)
         for name in airbubble_df['files'].to_list():
             # for patch naming style SUShud37_30_8064_6048.png
             x_cord = int(name.split(".")[0].split("_")[-2])
             y_cord = int(name.split(".")[0].split("_")[-1])
             airbubbles_mask[int(y_cord/downsize), int(x_cord/downsize)] = True
-        sav_fig(mask_saving_path, Image.fromarray(airbubbles_mask).convert("L"),
+
+            # airbubbles_mask = dilation(airbubbles_mask,square(2)).astype(int) * 255
+            airbubbles_mask = airbubbles_mask.astype(int) * 255
+        sav_fig(mask_saving_path, Image.fromarray(airbubbles_mask.astype(np.uint8)).convert("L"),
                 sav_name="#airbubbles#mask", cmap='gray')
     if merged:
         print("-----Producing masks a merged mask--------")
-        merge_masks(mask_saving_path)
+        merge_masks_new(mask_saving_path)
+
 def merge_masks(path):
     listofmasks = os.listdir(path)
-    listofmasks = [f for f in listofmasks if f.endswith("png") and not (f.startswith("#binary") or f.startswith("#merged")
+    listofmasks = [f for f in listofmasks if f.endswith("png") and not (f.startswith("#tissue") or f.startswith("#merged")
                                         or f.startswith("#artifact") or f.startswith("#thumb") or f.startswith("#segmentation"))]
     shape = Image.open(os.path.join(path, listofmasks[0])).size
     output_mask = np.full((shape[1], shape[0]), False)
@@ -524,34 +564,230 @@ def merge_masks(path):
         mask = Image.open(os.path.join(path, img)).convert("L")
         mask = mask.resize(shape)
         output_mask = output_mask | np.asarray(mask)
-    kernel = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]])
-    # dilation(output_mask, kernel)
-    Image.fromarray(dilation(output_mask, kernel)).save(f"{path}/#merged#mask.png", quality=95)
-    # sav_fig(path, Image.fromarray(output_mask).convert("L"), sav_name="merged_mask", cmap='gray')
+
+    merged_mask_o = output_mask.astype(int) * 255    
+    merged_mask_o = Image.fromarray(merged_mask_o.astype(np.uint8))
+    sav_fig(path, merged_mask_o ,sav_name="#original#merged#mask", cmap='gray')
+
+    merged_mask = dilation(output_mask, square(3))
+    merged_mask = merged_mask.astype(int) * 255
+    merged_mask = Image.fromarray(merged_mask.astype(np.uint8))
+    sav_fig(path, merged_mask ,sav_name="#merged#mask", cmap='gray')
+
+def merge_masks_new(path):
+    listofmasks = os.listdir(path)
+    listofmasks = [f for f in listofmasks if f.endswith("png") and (f.startswith("#bl") or f.startswith("#bubble")
+                                        or f.startswith("#fol") or f.startswith("#dam"))]
+    shape = Image.open(os.path.join(path, listofmasks[0])).convert("L").size
+    # output_mask = np.full((shape[1], shape[0]), False)
+    resized_masks = []
+    for img in listofmasks:
+        mask = Image.open(os.path.join(path, img)).convert("L")
+        mask = mask.resize(shape, resample=Image.LANCZOS)
+        resized_masks.append(np.asarray(mask))
+
+    output_mask = np.any(resized_masks, axis=0)
+    merged_mask_o = output_mask.astype(int) * 255    
+    merged_mask_o = Image.fromarray(merged_mask_o.astype(np.uint8))
+    sav_fig(path, merged_mask_o ,sav_name="#original#merged#mask", cmap='gray')
+
+    merged_mask = dilation(output_mask, square(2))
+    merged_mask = merged_mask.astype(int) * 255
+    merged_mask = Image.fromarray(merged_mask.astype(np.uint8))
+    sav_fig(path, merged_mask ,sav_name="#merged#mask", cmap='gray')
+
+
+def segmentation_color_mask_with_df(df, sav_path, wsi_shape, downsize=50):
+    mask_shape = (round(wsi_shape[1]/downsize), round(wsi_shape[0]/downsize), 3)# h,w
+    segmentation_mask = np.zeros(mask_shape, dtype=np.uint8)
+    for i, row in df.iterrows():
+
+        name = row['files']
+        x_cord = int(name.split(".")[0].split("_")[-2])
+        y_cord = int(name.split(".")[0].split("_")[-1])
+
+        patch_class = row['predicted_class']
+        #{0: 'artifact_free', 1: 'blood', 2: 'blur', 3: 'bubble', 4: 'damage', 5: 'fold'}
+        if patch_class == 0: # Artifact-free
+            color = (128, 128, 128)  # Gray
+
+        elif patch_class == 1: # Blood
+            color = (255, 0, 0)  # Red
+
+        elif patch_class == 2: # Blur
+            color = (255, 165, 0)  # Orange
+
+        elif patch_class == 3: # Airbubble
+            color = (0, 255, 0)  # Green
+
+        elif patch_class == 4: # Damage
+            color = (255, 255, 0)  # Yellow
+
+        elif patch_class == 5: # Fold
+            color = (255, 65, 90)  # Pink
+
+        segmentation_mask[int(y_cord/downsize), int(x_cord/downsize)] = color
+
+
+    colors = [(0.5, 0.5, 0.5), (1, 0, 0), (1, 165/255, 0), (0,1,0), (1,1,0), (1, 65/255, 90/255)]
+    labels = ['Artifact-free', 'Blood', 'Blur', 'Airbubble', 'Damage', 'Fold']
+    patches = [mpatches.Patch(color=colors[i], label=labels[i]) for i in range(len(colors))]
+
+    plt.figure(figsize=(20, 20)) 
+    plt.clf()
+    plt.axis("off")
+    plt.title(None)
+    plt.imshow(segmentation_mask)
+    # plt.colorbar(label='Class')
+    plt.legend(handles=patches, loc='best', fontsize=16, framealpha=0.3, labelcolor='white', facecolor='white')
+    plt.savefig(f"{sav_path}/#segmentation#mask_with_df.png", dpi=600, bbox_inches='tight', pad_inches=0)
+
+
+def segmentation_color_mask_with_df_v2(df, sav_path, wsi_shape, downsize=50):
+    mask_shape = (round(wsi_shape[1]/downsize), round(wsi_shape[0]/downsize), 3)# h,w
+    segmentation_mask = np.zeros(mask_shape, dtype=np.uint8)
+    for i, row in df.iterrows():
+
+        name = row['files']
+        x_cord = int(name.split(".")[0].split("_")[-2])
+        y_cord = int(name.split(".")[0].split("_")[-1])
+
+        patch_class = row['predicted']
+        #{0: 'artifact_free', 1: 'artifact'}
+        if patch_class == 0: # Artifact-free
+            color = (128, 128, 128)  # Gray
+
+        elif patch_class == 1: # Artifact
+            color = (255, 0, 0)  # Red
+
+        segmentation_mask[int(y_cord/downsize), int(x_cord/downsize), :] = color
+
+    colors_n = [(0.5, 0.5, 0.5), (1.0, 0, 0)]
+    labels = ['Artifact-free', 'Artifact']
+    patches = [mpatches.Patch(color=colors_n[i], label=labels[i]) for i in range(len(colors_n))]
+
+    plt.figure(figsize=(20, 20))    
+    plt.clf()
+    plt.axis("off")
+    plt.title(None)
+    plt.imshow(segmentation_mask)
+    # plt.colorbar(label='Class')
+    plt.legend(handles=patches, loc='best', fontsize=16, framealpha=0.3, facecolor="white")
+    plt.savefig(f"{sav_path}/#segmentation#mask_with_df.png", dpi=600, bbox_inches='tight', pad_inches=0)
+        
+
+def post_process_mask_v2(dataf, mask_saving_path, wsi_shape, downsize=50):
+    # used in binary pipelines to produce artifact-free mask
+    # dataframe can be loaded from excel sheet instead
+    # dataf = pd.read_excel(path_to_excel, engine='openpyxl')
+   
+    print("-----Producing mask for artifacts-------")
+    a_df = dataf[dataf['predicted'] == 1]
+    mask_shape = (round(wsi_shape[1]/downsize), round(wsi_shape[0]/downsize))# h,w
+    mask = np.full(mask_shape, False)
+    for name in a_df['files'].to_list():
+        #print(name)
+        x_cord = int(name.split(".")[0].split("_")[-2])
+        y_cord = int(name.split(".")[0].split("_")[-1])
+        mask[int(y_cord/downsize), int(x_cord/downsize)] = True
+ 
+    artifact_mask =  mask.astype(int) * 255
+    artifact_mask = Image.fromarray(artifact_mask.astype(np.uint8))
+    sav_fig(mask_saving_path, artifact_mask, sav_name="#artifact#mask", cmap='gray')
+
+    print("-----Producing mask for artifacts-free-------")
+    afree_df = dataf[dataf['predicted'] == 0]
+    mask_shape = (round(wsi_shape[1]/downsize), round(wsi_shape[0]/downsize))# h,w
+    mask = np.full(mask_shape, False)
+    # print("Length of artifactFree_df", len(afree_df))
+    for name in afree_df['files'].to_list():
+        # print(name)
+        # for patch naming style SUShud37_30_8064_6048.png
+        x_cord = int(name.split(".")[0].split("_")[-2])
+        y_cord = int(name.split(".")[0].split("_")[-1])
+        mask[int(y_cord/downsize), int(x_cord/downsize)] = True
+
+    artifactfree_mask_o =  mask.astype(int) * 255
+    artifactfree_mask_o = Image.fromarray(artifactfree_mask_o.astype(np.uint8))
+    sav_fig(mask_saving_path, artifactfree_mask_o, sav_name="#original#artifactfree#mask", cmap='gray')
+
+    # artifactfree_mask = Image.fromarray(mask).convert("L")   
+    artifactfree_mask = dilation(mask, square(2)) # removing small holes from black regions
+    artifactfree_mask = closing(artifactfree_mask, square(2)) # closing small holes
+    artifactfree_mask =  artifactfree_mask.astype(int) * 255
+    artifactfree_mask = Image.fromarray(artifactfree_mask.astype(np.uint8))
+    sav_fig(mask_saving_path, artifactfree_mask, sav_name="#artifactfree#mask", cmap='gray')
+
+
+
 
 def artifact_free_mask(path):
-    binary_mask = Image.open(os.path.join(path, "#binary#mask.png")).convert("L")
+    binary_mask = Image.open(os.path.join(path, "#tissue#mask.png")).convert("L")
     artifact_mask = Image.open(os.path.join(path, "#merged#mask.png")).convert("L")
-    shape = artifact_mask.size
-    binary_mask = np.asarray(binary_mask.resize(shape), dtype=np.bool)
-    artifact_mask = np.asarray(artifact_mask, dtype=np.bool)
+    shape = binary_mask.size
+    binary_mask = np.asarray(binary_mask.resize(shape, resample= Image.LANCZOS), dtype=np.bool)
+    artifact_mask = np.asarray(artifact_mask.resize(shape, resample= Image.LANCZOS), dtype=np.bool)
     output_mask = binary_mask.astype(int) - artifact_mask.astype(int)
     output_mask = (output_mask == 1)
-    # kernel = np.ones((2, 2))
-    kernel = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]])
-    final_mask = Image.fromarray(opening(output_mask, kernel)).convert("L")
+
+    artifactfree_mask_o =  output_mask.astype(int) * 255
+    artifactfree_mask_o = Image.fromarray(artifactfree_mask_o.astype(np.uint8))
+    sav_fig(path, artifactfree_mask_o, sav_name="#original#artifactfree#mask", cmap='gray')
+
+    
+    # kernel = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]])
+    # output_mask = dilation(output_mask, kernel)
+    output_mask = opening(output_mask, square(2)).astype(int) * 255
+    final_mask = Image.fromarray(output_mask.astype(np.uint8))
     sav_fig(path, final_mask, sav_name="#artifactfree#mask", cmap='gray')
 
-def segmentation_color_mask(path, colors= colors, scale=1):
+
+
+def segmentation_color_mask(path, colors= colors):
+    # used in multiclass and ensemble pipelines
     listofmasks = os.listdir(path)
     listofmasks = [f for f in listofmasks if f.endswith("png") and not (f.startswith("#merged") or
-                        f.startswith("#segm") or f.startswith("#artifactfree") or f.startswith("#thumb"))]
+                        f.startswith("#segm") or f.startswith("#original") or f.startswith("#artifactfree") or f.startswith("#thumb"))]
+    shape = Image.open(os.path.join(path, listofmasks[0])).size # Take shape of One_mask
+    seg_img = np.zeros(shape=(shape[1], shape[0], 3))# make a 3D array
+
+    legend_patch = []
+    sorted_list = sorted(listofmasks, key=lambda x: x.startswith("#t"), reverse=True)
+    for f in sorted_list:
+        try:
+            mask_type = f.split("#")[1]
+        except: 
+            mask_type = f.split("#")[0]
+        mask = Image.open(os.path.join(path, f)).convert("L")
+        mask_1 = np.asarray(mask.resize(shape), dtype=np.float32)
+        seg_img[:, :, 0] += (mask_1 * (colors[mask_type][0]))
+        seg_img[:, :, 1] += (mask_1 * (colors[mask_type][1]))
+        seg_img[:, :, 2] += (mask_1 * (colors[mask_type][2]))
+        legend_patch.append(mpatches.Patch(color=colors[mask_type], label=mask_type.capitalize()))
+
+    plt.clf()
+    plt.axis("off")
+    plt.title(None)
+    plt.legend(handles=legend_patch, loc='best', fontsize=12, framealpha=0.3, facecolor="white")
+
+    im = Image.fromarray((seg_img*255).astype(np.uint8), 'RGB')
+    plt.imshow(im)
+    plt.savefig(f"{path}/#segmentation#mask.png", dpi=600, bbox_inches='tight', pad_inches=0)
+
+
+def segmentation_color_mask_v2(path, colors= colors):
+    # used for binary pipeline
+    listofmasks = os.listdir(path)
+    listofmasks = [f for f in listofmasks if f.endswith("png") and not (f.startswith("#merged") or
+                        f.startswith("#segm") or f.startswith("#original") or f.startswith("#thumb") or f.startswith("#artifactfree"))]
+
     shape = Image.open(os.path.join(path, listofmasks[0])).size # Take shape of One_mask
     seg_img = np.zeros(shape=(shape[1], shape[0], 3))# make a 3D array
     legend_patch = []
     # first mask color comes first on the colormap
     # sort to make binary mask come first
-    sorted_list = sorted(listofmasks, key=lambda x: x.startswith("#b"), reverse=True)
+    sorted_list = sorted(listofmasks, key=lambda x: x.startswith("#t"), reverse=True)
+
     for f in sorted_list:
         mask_type = f.split("#")[1]
         mask = Image.open(os.path.join(path, f)).convert("L")
@@ -559,34 +795,34 @@ def segmentation_color_mask(path, colors= colors, scale=1):
         seg_img[:, :, 0] += (mask_1 * (colors[mask_type][0]))
         seg_img[:, :, 1] += (mask_1 * (colors[mask_type][1]))
         seg_img[:, :, 2] += (mask_1 * (colors[mask_type][2]))
-        if mask_type == "binary":
-            legend_patch.append(mpatches.Patch(color=colors[mask_type], label="Tissue"))
-        else:
-            legend_patch.append(mpatches.Patch(color=colors[mask_type], label=mask_type.capitalize()))
+        legend_patch.append(mpatches.Patch(color=colors[mask_type], label=mask_type.capitalize()))
 
     plt.clf()
     plt.axis("off")
     plt.title(None)
-    plt.legend(handles=legend_patch, loc='best', fontsize=10, framealpha=0.3, facecolor="y")
+    plt.legend(handles=legend_patch, loc='best', fontsize=8, framealpha=0.3, facecolor="y")
+    
+    im = Image.fromarray((seg_img*255).astype(np.uint8), 'RGB')
+    plt.imshow(im)
+    plt.savefig(f"{path}/#segmentation#mask.png", dpi=600, bbox_inches='tight', pad_inches=0)
 
-    if scale > 1:
-        im = Image.fromarray((seg_img*255).astype(np.uint8), 'RGB')
-        im = im.resize((im.width*scale, im.height*scale))
-        # plt.legend(handles=legend_patch, loc='best', fontsize= 12, framealpha = 0.3, facecolor="y")
-        plt.imshow(im)
-        plt.savefig(f"{path}/#segmentation#mask.png", dpi=300, bbox_inches='tight', pad_inches=0)
-        # resized_im.save(f"{path}/segmentation_mask.png", quality=95, bbox_inches='tight', pad_inches=0) # does not give legend
-        # sav_fig(path, resized_im, sav_name="segmentation_mask")
-    else:
-        im = Image.fromarray((seg_img*255).astype(np.uint8), 'RGB')
-        # plt.imshow((seg_img*255).astype(np.uint8))
-        #sav_fig(path, Image.fromarray((seg_img*255).astype(np.uint8)), sav_name="segmentation_mask")
-        # plt.savefig(f"{path}/segmentation_mask.png", dpi=300, bbox_inches='tight', pad_inches=0)
-        plt.imshow(im)
-        plt.savefig(f"{path}/#segmentation#mask.png", dpi=300, bbox_inches='tight', pad_inches=0)
 
-def refine_artifacts_wsi(path_to_wsi, path):
+def refine_artifacts_wsi(path_to_wsi, path, name=None):
     artifact_free_mask(path)
+    artifactfree_mask = os.path.join(path, "#artifactfree#mask.png")
+    mask = vips.Image.new_from_file(artifactfree_mask).flatten()
+    wsi = read_vips(path_to_wsi)
+    # if path_to_wsi.endswith("mrxs"): # mrxs are scanned with
+    #     print("File is MRXS")
+    #     wsi = vips.Image.new_from_file(path_to_wsi, level=1, autocrop=True).flatten()
+    # else:
+    #     wsi = vips.Image.new_from_file(path_to_wsi, level=0, autocrop=True).flatten()
+    mask = mask.resize(wsi.width / mask.width, vscale=(wsi.height / mask.height), kernel="nearest")
+    wsi *= mask / 255.0
+    wsi.write_to_file(f"{path}/refined_{name}.tiff",  tile=True, properties=True, tile_width=512,
+                      tile_height=512, compression="jpeg", pyramid=True) ### CHECK THIS
+
+def refine_artifacts_wsi_v2(path_to_wsi, path, name=None):
     artifactfree_mask = os.path.join(path, "#artifactfree#mask.png")
     mask = vips.Image.new_from_file(artifactfree_mask).flatten()
     if path_to_wsi.endswith("mrxs"): # mrxs are scanned with
@@ -596,16 +832,41 @@ def refine_artifacts_wsi(path_to_wsi, path):
         wsi = vips.Image.new_from_file(path_to_wsi, level=0, autocrop=True).flatten()
     mask = mask.resize(wsi.width / mask.width, vscale=(wsi.height / mask.height), kernel="nearest")
     wsi *= mask / 255.0
-    wsi.write_to_file(f"{path}/refined.tiff",  tile=True, properties=True, tile_width=512,
+    wsi.write_to_file(f"{path}/refined_{name}.tiff",  tile=True, properties=True, tile_width=512,
                       tile_height=512, compression="jpeg", pyramid=True) ### CHECK THIS
 
+
 def calculate_quality(path_to_masks):
+    # used in multiclass/ensemble pipelines
     report = dict()
     listofmasks = os.listdir(path_to_masks)
     listofmasks = [f for f in listofmasks if f.endswith("png") and not
-                                            (f.startswith("#merged") or f.startswith("#segm")
-                                            or f.startswith("#thumb") or f.startswith("#binar"))]
-    baseline_matrix = np.asarray(Image.open(os.path.join(path_to_masks, "#binary#mask.png")).convert("L"), dtype=np.bool)
+                                            (f.startswith("#merged") or f.startswith("#original#merged") or f.startswith("original") or f.startswith("#segm")
+                                            or f.startswith("#thumb") or f.startswith("#artifactfree") or f.startswith("#tissue"))]
+    artifact_mask_s = Image.open(os.path.join(path_to_masks, "#original#merged#mask.png")).convert("L").size
+    print("Shape of artifact_mask, ", artifact_mask_s )
+    baseline_matrix = Image.open(os.path.join(path_to_masks, "#tissue#mask.png")).convert("L").resize(artifact_mask_s)
+    print("Shape of tissue_mask, ", baseline_matrix.size)
+    baseline_matrix = np.asarray(baseline_matrix, dtype=np.bool)
+    total_pixels = np.sum(baseline_matrix == 1)
+    sorted_list = sorted(listofmasks, key=lambda x: x.startswith("#or"), reverse=False)
+    for img in sorted_list:
+        mask_sum = np.sum(np.asarray(Image.open(os.path.join(path_to_masks, img)).convert("L"), dtype=np.bool) == 1)
+        label = img.split("#")[1]
+        if label == "original":
+            label = "artifact-free"
+        report[label] = str(round(mask_sum/total_pixels * 100, 2)) + " %"
+    pp = pprint.PrettyPrinter(width=41, compact=True)
+    pp.pprint(report)
+    with open(f"{path_to_masks}/quality_report.json", "w") as f:
+        json.dump(report, f, indent=4)
+
+def calculate_quality_v2(path_to_masks):
+    # used in binary pipeline
+    report = dict()
+    listofmasks = os.listdir(path_to_masks)
+    listofmasks = [f for f in listofmasks if f.endswith("png") and f.startswith("#original")]
+    baseline_matrix = np.asarray(Image.open(os.path.join(path_to_masks, "#tissue#mask.png")).convert("L"), dtype=np.bool)
     total_pixels = np.sum(baseline_matrix == 1)
     for img in listofmasks:
         mask_sum = np.sum(np.asarray(Image.open(os.path.join(path_to_masks, img)).convert("L"), dtype=np.bool) == 1)
@@ -623,7 +884,6 @@ def check_tissue_region(patch):
         return False
     else:
         return True
-
 
 def extract_patches_coords(location, file, path, sav_patch_folder,
                            patch_size, use_mask_to_threshold=True,
@@ -650,7 +910,7 @@ def extract_patches_coords(location, file, path, sav_patch_folder,
     slide = read_vips(file_path, level=level)
     width, height = slide.width, slide.height
 
-    mask_path = os.path.join(path, "#binary#mask.png")
+    mask_path = os.path.join(path, "#tissue#mask.png")
     mask = vips.Image.new_from_file(mask_path)
     resized_mask = mask.resize(width/mask.width,
                                vscale=height/mask.height, kernel="nearest")
@@ -716,14 +976,14 @@ class WSI_Patch_Dataset(Dataset):
 
 
 
-def create_foreground_mask_vips(wsi_dir, f, save_path=None, downsize=1):
+def create_foreground_mask_vips(wsi_dir, f, save_path=None, downsize=50):
     # Open the slide image using PyVips
     print("\n##########################################")
     print(f"Creating basic binary masks for {f}")
     st = time.time()
     slide_path = os.path.join(wsi_dir, f)
     slide = read_vips(slide_path)
-    if "#binary#mask.png" not in os.listdir(save_path):
+    if "#tissue#mask.png" not in os.listdir(save_path):
     # Downsize the image if requested
         if downsize != 1:
             # slide = slide.reduce(downsize, downsize)
@@ -744,7 +1004,7 @@ def create_foreground_mask_vips(wsi_dir, f, save_path=None, downsize=1):
         if save_path is not None:
             # sav_path = os.path.join(save_path, "#binary#mask")
             # cv2.imwrite(sav_path, binary_mask)
-            sav_fig(save_path, binary_mask, sav_name="#binary#mask", cmap='gray')
+            sav_fig(save_path, binary_mask, sav_name="#tissue#mask", cmap='gray')
 
     print(f"Time taken for creating binary mask {time.time()-st:.2f} seconds")
     return slide.width, slide.height
@@ -807,6 +1067,27 @@ def infer_cnn_v3(test_loader, model, samples=5):
 
     return convert_batch_list(y_pred), convert_batch_list(y_true),  convert_batch_list(mean_1)
 
+def infer_cnn_v4(model,test_loader, use_prob_threshold = None):
+    y_pred, probs, y_true = [], [], []
+    for data, target in test_loader:
+        if torch.cuda.is_available():
+            data, target = data.cuda(), target.cuda()
+
+        output, _ = model(data)
+        probabilities = F.softmax(output, dim=1)
+
+        if use_prob_threshold is not None:
+            preds = (probabilities >= use_prob_threshold)
+            _, preds = torch.max(preds, 1)
+        else:
+            _, preds = torch.max(output, 1)
+
+        probs.append(list(np.around(probabilities[:,1].detach().cpu().numpy(), decimals=3)))
+        y_pred.append(list(preds.cpu().numpy()))
+        y_true.append(list(target.cpu().numpy()))
+
+    return convert_batch_list(y_pred), convert_batch_list(y_true),  convert_batch_list(probs)
+
 def infer_vit_v3(model, test_loader):
     y_preds, probs = [], []
     model.eval()
@@ -817,10 +1098,34 @@ def infer_vit_v3(model, test_loader):
 
             output = model(data)
             probabilities = F.softmax(output, dim=1)
-                _, preds = torch.max(output, 1)
+            _, preds = torch.max(output, 1)
             y_true.append(list(target.cpu().numpy()))
             probs.append(list(np.around(probabilities[:,1].detach().cpu().numpy(), decimals=3)))
             y_preds.append(list(preds.cpu().numpy()))
+    return convert_batch_list(y_preds),convert_batch_list(y_true),  convert_batch_list(probs)
+
+
+def infer_vit_v4(model, test_loader, use_prob_threshold = None):
+    y_preds, probs, y_true = [], [], []
+    with torch.no_grad():
+        for data, target in test_loader:
+            if torch.cuda.is_available():
+                data, target = data.cuda(), target.cuda()
+
+            output = model(data)
+            probabilities = F.softmax(output, dim=1)
+
+            if use_prob_threshold is not None:
+                preds = (probabilities >= use_prob_threshold)
+                _, preds = torch.max(preds, 1)
+            else:
+                _, preds = torch.max(output, 1)
+
+          
+            y_true.append(list(target.cpu().numpy()))
+            probs.append(list(np.around(probabilities[:,1].detach().cpu().numpy(), decimals=3)))
+            y_preds.append(list(preds.cpu().numpy()))
+
     return convert_batch_list(y_preds),convert_batch_list(y_true),  convert_batch_list(probs)
 
 
@@ -1212,7 +1517,7 @@ def infer_binary_v3(model, test_loader, use_prob_threshold = None):
         else:
             _, preds = torch.max(output, 1)
 
-        probs.append(list(np.around(probabilities[:,0].detach().cpu().numpy(), decimals=5)))
+        probs.append(list(np.around(probabilities[:,0].detach().cpu().numpy(), decimals=3)))
         y_preds.append(list(preds.cpu().numpy()))
         y_true.append(list(target.cpu().numpy()))
 
@@ -1335,22 +1640,33 @@ def plot_confusion_matrix(cm, classes, normalize=True, title=None, cmap='tab20b'
 
 
 def assign_class(row):
-    if row['predicted_artifact'] == 0:
-        return 0
-    else:
+    if row['predicted'] == 1:
         dic = {'blood_p':1, 'blur_p':2, 'bubble_p':3, 'damage_p':4, 'fold_p':5}
-        # max_col = row[['blood_p', 'blur_p', 'bubble_p','damage_p', 'fold_p']].values
-        # max_col_index = np.argmax(max_col, axis=1)
         columns = ['blood_p', 'blur_p', 'bubble_p', 'damage_p', 'fold_p']
         max_col = max(columns, key=lambda col: row[col])
-        return dic[max_col]
-
-def best_prob(row):
-    if row['predicted_artifact'] == 1:
-        max_prob = row[['blood_p', 'blur_p', 'bubble_p', 'damage_p', 'fold_p']].max()
-        return np.round(max_prob, decimals=5)
+        return dic[max_col] 
     else:
         return 0
+
+def assign_class_v2(row):
+    if row['predicted'] != 0:
+        prob = row['probs']
+        max_prob_index = np.argmax(prob)
+        return max_prob_index
+    else:
+        return 0
+
+def best_prob(row):
+    if row['predicted'] == 1:
+        max_prob = row[['blood_p', 'blur_p', 'bubble_p', 'damage_p', 'fold_p']].max()
+        return np.round(max_prob, decimals=3)
+    else:
+        return 0
+
+def max_prob(row):
+    max_prob = row[['blood_p', 'blur_p', 'bubble_p', 'damage_p', 'fold_p']].max()
+    return np.round(max_prob, decimals=3)
+   
 
 def make_binary_label(row):
     if row['ground_truth'] == 0:
@@ -1360,15 +1676,14 @@ def make_binary_label(row):
 
 def truth_prob_ensemb(row):
     max_prob = row[['blood_p', 'blur_p', 'bubble_p', 'damage_p', 'fold_p']].max()
-    return np.round(1-max_prob, decimals=5)
+    return np.round(1-max_prob, decimals=3)
 
 def infer_multiclass_v3(model, test_loader, use_prob_threshold = None):
     y_preds, probs, artifact_free, blood, blur, bubble, damage, fold, y_true = [], [], [], [], [], [], [], [], []
     for data, target in test_loader:
         if torch.cuda.is_available():
             data = data.cuda()
-            # ID to classes  {0: 'artifact_free', 1: 'blood', 2: 'blur',
-            # 3: 'bubble', 4: 'damage', 5: 'fold'}
+            # ID to classes  {0: 'artifact_free', 1: 'blood', 2: 'blur', # 3: 'bubble', 4: 'damage', 5: 'fold'}
         try:
             output, _ = model(data)
         except:
@@ -1383,7 +1698,7 @@ def infer_multiclass_v3(model, test_loader, use_prob_threshold = None):
             _, preds = torch.max(output, 1)
         # probabilities = F.softmax(output, dim=1).detach().cpu().numpy()
 
-        probs.append(list(np.around(probabilities.detach().cpu().numpy(), decimals=4)))
+        probs.append(list(np.around(probabilities.detach().cpu().numpy(), decimals=3)))
         y_pred = preds.cpu().numpy()
 
         artifact_free.append(list((y_pred == 0).astype(int)))
