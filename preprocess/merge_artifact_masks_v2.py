@@ -39,7 +39,7 @@ def merge_masks(path, image_name, listofmasks_):
     merged_mask = Image.fromarray(merged_mask.astype(np.uint8))
     sav_fig(path, merged_mask ,sav_name=f"{image_name}_merged", cmap='gray')
 
-# sav_dir = "D:\\mask_from_xml\\qunatitative_test\\Inference\\s6"
+# sav_dir = "path_to\\qunatitative_test\\Inference\\s6"
 sav_dir = "/path_to/new_WSIs/Inference/s5/"
 directory = sav_dir
 

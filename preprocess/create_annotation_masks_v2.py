@@ -4,12 +4,12 @@ warnings.simplefilter(action='ignore', category=DeprecationWarning) # Ignore all
 
 import os
 import json
-os.environ["PATH"] = "D:\\mask_from_xml\\openslide-win64-20171122\\bin" + ";" + os.environ["PATH"]
-os.environ["PATH"] = "D:\\mask_from_xml\\vips-dev-8.11\\bin" + ";" + os.environ["PATH"]
+os.environ["PATH"] = "path_to\\openslide-win64-20171122\\bin" + ";" + os.environ["PATH"]
+os.environ["PATH"] = "path_to\\vips-dev-8.11\\bin" + ";" + os.environ["PATH"]
 
 import os # Useful when running on windows.
 os.environ["PATH"] = "/path_to/openslide-win64-20171122/bin/" + ";" + os.environ["PATH"]
-# os.environ["PATH"] = "E:\\Histology\\WSIs\\vips-dev-8.11\\bin" + ";" + os.environ["PATH"]
+# os.environ["PATH"] = "path_to\vips-dev-8.11\\bin" + ";" + os.environ["PATH"]
 os.environ["PATH"] = "/path_to/vips-dev-8.11/bin/" + ";" + os.environ["PATH"]
 
 
