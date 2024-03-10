@@ -1,6 +1,6 @@
 import time
 import os
-os.environ["PATH"] = "E:\\Histology\\WSIs\\vips-dev-8.11\\bin" + ";" + os.environ["PATH"]
+os.environ["PATH"] = "path_to\\vips-dev-8.11\\bin" + ";" + os.environ["PATH"]
 
 os.environ["PATH"] = "/path_to/openslide-win64-20171122/bin/" + ";" + os.environ["PATH"]
 # os.environ["PATH"] = "E:\\Histology\\WSIs\\vips-dev-8.11\\bin" + ";" + os.environ["PATH"]
@@ -90,7 +90,6 @@ def create_patches(location, file, mask_path, label,
     print(f"Patches created for {file} with {label} label in {minutes:.2f} minutes.")
 
 tile_size = (224, 224) 
-fname = 'INC_SM_0141'
 dataset_dir = f"/path_to/new_WSIs/Inference/{fname}/"
 t_files = os.listdir(dataset_dir)
 print("Total masks", len(t_files))
