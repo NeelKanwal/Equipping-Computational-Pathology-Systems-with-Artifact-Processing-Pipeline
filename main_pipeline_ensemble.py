@@ -4,7 +4,6 @@
 # Update paths to processed datasets
 
 
-
 # All libraries
 if __name__ == '__main__':
     import warnings
@@ -15,14 +14,24 @@ if __name__ == '__main__':
 
     import matplotlib.pyplot as plt
     import os
+
+    vipshome = '/path_to/vips-dev-8.12/bin/'
+    # vipshome = '/path_to/vips-dev-8.11/bin/'
+    os.environ['PATH'] = vipshome + ';' + os.environ['PATH']
+    import pyvips as vips
+    import openslide
+    print("Pyips: ", vips.__version__)
+    print("Openslide: ", openslide.__version__)
+
     import pandas as pd
     import torch
     import numpy as np
     import time
     from torchvision import transforms
-    from utils import create_binary_mask, create_patches, data_generator, load_cnn_model, load_vit_model\
+    from utils import create_binary_mask, create_patches, data_generator, load_cnn_model, load_vit_model, \
         infer_cnn, infer_vit, post_process_masks, segmentation_color_mask, calculate_quality, \
-        refine_artifacts_wsi
+        refine_artifacts_wsi, best_prob, truth_prob_ensemb, assign_class, truth_prob_ensemb,\
+        segmentation_color_mask_v2, max_prob, segmentation_color_mask_with_df
 
     from mmcv.cnn import get_model_complexity_info
     # Alternate Libraries to
@@ -43,11 +52,19 @@ if __name__ == '__main__':
 
     # Loading directory
     # Update paths here
-    wsi_dir = "path_to/wsi_data/"
+    # wsi_dir = "/path_to/new_WSIs/"
+    # wsi_dir = "/path_to/INCLIVA_WSIs/"
+    
     # Saving directory
     save_dir = wsi_dir
-    models_location = "path_to/model_weights/"
-    ensemble =="cnns" # "vits"
+    
+    models_location = "/path_to/model_weights/"
+    
+    choose_model = "cnns" # "vits", "cnns"
+    evaluate_with_prob = 0.327 # Use this probablity for thresholding, 
+    #set to None for not using this feature
+    ## Ensemble CNN = 0.326
+    ## Ensemble ViTs = 0.052
 
     # CNN Models Weights =
     blood_cnn = "blood_cnn.dat"
@@ -68,43 +85,57 @@ if __name__ == '__main__':
     segmentation_mask = True
     refined_wsi = True
     quality_report = True
-    evaluate_with_prob = 0.326 # Use this probablity for thresholding, set to None for not using this feature
-
-    fig = plt.subplots(figsize=(12, 8))
     cal_throughput = True
+    
+
+    fig = plt.subplots(figsize=(12, 12))
+    
 
     # Other params
-    cuda_gpu = 4
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(cuda_gpu)
-    torch.cuda.set_device(cuda_gpu)
+    
     torch.cuda.empty_cache()
-
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+    # os.environ['TORCH_USE_CUDA_DSA'] = '1'
+    cuda_device = 7
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(cuda_device)
+    torch.cuda.empty_cache()
+    # torch.cuda.set_device(cuda_device)
+    print("Current CUDA device = ", torch.cuda.current_device())
+    
     downsize = 224
     patch_extraction_size = 224
     mask_overlap = 80.0
-    batch_size = 128
+    batch_size = 64
     cpu_workers = 40
-    use_prob_threshold = 0.95 
+    # use_prob_threshold = 0.98 
     # None  # whether to give final prediction {0,1} based on certain probability
 
     torch.manual_seed(250)
 
     # read the files
     wsi_files = os.listdir(wsi_dir)
-    wsi_files = [f for f in wsi_files if f.endswith("scn") or f.endswith("mrxs")]
+    wsi_files = [f for f in wsi_files if f.endswith("svs") or f.endswith("tif") or f.endswith("ndpi") or f.endswith("mrxs")]
     # get all files except temp directory containing patches
 
     print(f"Total files in {wsi_dir} directory are {len(wsi_files)}")
 
-    path = os.path.join(wsi_dir, "cnn_ensemble")
-    if not os.path.exists(path):
-        os.mkdir(path)
+    if choose_model == "cnns":
+        d_path = os.path.join(save_dir, "cnn_ensemble2")
+        if not os.path.exists(d_path):
+            os.mkdir(d_path)
+    else:
+        d_path = os.path.join(save_dir, "vit_ensemble2")
+        if not os.path.exists(d_path):
+            os.mkdir(d_path)
 
     # start patching process
     for f in wsi_files:
+    # for f in ["CZ542_TP_I1.mrxs"]:
         st = time.time()
         # find binary mask to locate tissue on WSI
-        path = os.path.join(path, f.split(".")[0])
+        fname =  f.split(".")[0]
+        path = os.path.join(d_path, fname)
         # just take the name not extension
         if not os.path.exists(path):
             os.mkdir(path)
@@ -121,7 +152,7 @@ if __name__ == '__main__':
         data_loader, total_patches = data_generator(patch_folder,  test_transform=test_transform,
                                         batch_size=batch_size, worker=cpu_workers)
 
-        if ensemble =="cnns": 
+        if choose_model =="cnns": 
             print("\nLoading CNN ensemble of MobileNetv3")
             # blur
             blur_model = load_cnn_model(models_location, blur_cnn)
@@ -131,6 +162,7 @@ if __name__ == '__main__':
             airbubble_model = load_cnn_model(models_location, airbubble_cnn)
 
         else:
+            print("\nLoading ViT ensemble of MobileNetv3")
             blur_model = load_vit_model(models_location, blur_vit)
             blood_model = load_vit_model(models_location, blood_vit)
             fold_model = load_vit_model(models_location, fold_vit)
@@ -141,7 +173,7 @@ if __name__ == '__main__':
                                                   as_strings=False, print_per_layer_stat=False)
         million_param = numerize.numerize(params*5)
         gflops = numerize.numerize(flops*5)
-        print(f"\nTotal model Mparam {million_param} and GFlops {gflops} in the ensemble.")
+        print(f"\nTotal model Mparam {million_param} and GFlops {gflops} in the {choose_model} ensemble.")
 
         if torch.cuda.is_available():
             print("Cuda is available")
@@ -155,26 +187,21 @@ if __name__ == '__main__':
         print("\n########### Inference Starts ##############")
         st2 = time.time()
         if evaluate_with_prob is not None:
-            print("Using thresholding @ ", evaluate_with_prob)
-        if ensemble =="cnns":     
+            print("Using probablity thresholding @ ", evaluate_with_prob)
+        if choose_model =="cnns":     
 
-            blur_pred, blur_prob = infer_cnn(blur_model, data_loader, use_prob_threshold)
-            blood_pred, blood_prob = infer_cnn(blood_model, data_loader, use_prob_threshold)
-            damaged_pred, damaged_prob = infer_cnn(damaged_model, data_loader, use_prob_threshold)
-            fold_pred, fold_prob = infer_cnn(fold_model, data_loader, use_prob_threshold)
-            airbubble_pred, airbubble_prob = infer_cnn(airbubble_model, data_loader, use_prob_threshold)
+            blur_pred, blur_prob = infer_cnn(blur_model, data_loader, use_prob_threshold=evaluate_with_prob)
+            blood_pred, blood_prob = infer_cnn(blood_model, data_loader, use_prob_threshold=evaluate_with_prob)
+            damaged_pred, damaged_prob = infer_cnn(damaged_model, data_loader, use_prob_threshold=evaluate_with_prob)
+            fold_pred, fold_prob = infer_cnn(fold_model, data_loader, use_prob_threshold=evaluate_with_prob)
+            airbubble_pred, airbubble_prob = infer_cnn(airbubble_model, data_loader, use_prob_threshold=evaluate_with_prob)
 
-            # blur_pred, y_true, blur_prob = infer_cnn_v3(blur_model, test_loader, use_prob_threshold=evaluate_with_prob)
-            # blood_pred, y_true1, blood_prob= infer_cnn_v3(blood_model, test_loader, use_prob_threshold=evaluate_with_prob)
-            # damaged_pred, y_true2, damaged_prob = infer_cnn_v3(damaged_model, test_loader, use_prob_threshold=evaluate_with_prob)
-            # fold_pred, y_true, fold_prob = infer_cnn_v3(fold_model, test_loader, use_prob_threshold=evaluate_with_prob)
-            # airbubble_pred, y_true, airbubble_prob = infer_cnn_v3(airbubble_model, test_loader, use_prob_threshold=evaluate_with_prob) 
         else: 
-            blur_pred,  blur_prob = infer_vit(blur_model, test_loader, use_prob_threshold=evaluate_with_prob)
-            blood_pred,  blood_prob = infer_vit(blood_model, test_loader, use_prob_threshold=evaluate_with_prob)
-            damaged_pred,  damaged_prob = infer_vit(damaged_model, test_loader, use_prob_threshold=evaluate_with_prob)
-            fold_pred,  fold_prob = infer_vit_v3(fold_model, test_loader, use_prob_threshold=evaluate_with_prob)
-            airbubble_pred, airbubble_prob = infer_vit(airbubble_model, test_loader, use_prob_threshold=evaluate_with_prob)
+            blur_pred,  blur_prob = infer_vit(blur_model, data_loader, use_prob_threshold=evaluate_with_prob)
+            blood_pred,  blood_prob = infer_vit(blood_model, data_loader, use_prob_threshold=evaluate_with_prob)
+            damaged_pred,  damaged_prob = infer_vit(damaged_model, data_loader, use_prob_threshold=evaluate_with_prob)
+            fold_pred,  fold_prob = infer_vit(fold_model, data_loader, use_prob_threshold=evaluate_with_prob)
+            airbubble_pred, airbubble_prob = infer_vit(airbubble_model, data_loader, use_prob_threshold=evaluate_with_prob)
 
         # setting them to boolean
 
@@ -185,7 +212,6 @@ if __name__ == '__main__':
         # Calculate throughtput
         if cal_throughput:
             print("Throughput: {:.2f} patches/seconds".format(total_patches/seconds))
-
 
         blur_pred_b = np.array(blur_pred).astype(bool)
         blood_pred_b = np.array(blood_pred).astype(bool)
@@ -199,31 +225,37 @@ if __name__ == '__main__':
         artifact_list = [a.astype(int) for a in artifact_list]
 
         file_names = [im.split("/")[-1] for im in data_loader.dataset.data_path]
-        data = {"files": file_names, "predicted": artifact_list, "blur": blur_pred, "blood": blood_pred,
-                "damage": damaged_pred, "fold": fold_pred, "airbubble": airbubble_pred,  "blur_p": blur_prob,
-                "blood_p": blood_prob,  "damage_p": damaged_prob, "fold_p": fold_prob, "airbubble_p": airbubble_prob}
+        data = {"files": file_names, "predicted": artifact_list,"blur_p": blur_prob, "blood_p": blood_prob,
+        "bubble_p": airbubble_prob,  "damage_p": damaged_prob, "fold_p": fold_prob, "blur": blur_pred, "blood": blood_pred,
+        "bubble": airbubble_pred, "damage": damaged_pred, "fold": fold_pred}
 
         dframe = pd.DataFrame(data)
+        
+        dframe.insert(1, 'artifact_p', dframe.apply(max_prob, axis=1))
+        dframe.insert(2, 'afree_p', dframe.apply(truth_prob_ensemb, axis=1))
+        dframe.insert(3, 'predicted_class', dframe.apply(assign_class, axis=1))
 
-        if use_prob_threshold is not None:
-            print(f"Probablity threshold of {use_prob_threshold} used for determining overall prediction.\n")
+        if evaluate_with_prob is not None:
+            print(f"Probablity threshold of {evaluate_with_prob} used for determining overall prediction.\n")
 
-        with pd.ExcelWriter(f"{path}/cnn_ensemble_predictions.xlsx") as wr:
+        with pd.ExcelWriter(f"{path}/ensemble_{choose_model}_predictions.xlsx") as wr:
             dframe.to_excel(wr, index=False)
 
         print("########### Postprocessing Starts ##########")
+        print(f"Using probabiliy threshold {evaluate_with_prob}.")
         # postprocess from dataframe
         st3 = time.time()
         post_process_masks(dframe, path, wsi_shape=(w, h), downsize=downsize)
 
         if segmentation_mask:
             st4 = time.time()
-            segmentation_color_mask(path, scale=10)
+            segmentation_color_mask(path)
+            segmentation_color_mask_with_df(dframe, sav_path= path, wsi_shape= (w, h), downsize=downsize)
             minutes3 = (time.time()-st4)/60
             print(f"Created color segmentation mask, time consumed {minutes3:.2f} minutes.")
         if refined_wsi:
             st5 = time.time()
-            refine_artifacts_wsi(os.path.join(wsi_dir, f), path)
+            refine_artifacts_wsi(os.path.join(wsi_dir, f), path, name=f"{fname}_ensemble_{choose_model}")
             minutes4 = (time.time()-st5)/60
             print(f"Refined {f} for artifacts, time consumed {minutes4:.2f} minutes.\n")
         if quality_report:
@@ -238,3 +270,8 @@ if __name__ == '__main__':
 
         minutes = (time.time()-st)/60
         print(f"Total for end-to-end processing for {f} in {minutes:.2f} minutes.")
+
+        print("\n-------------------------------------------------")
+        print("//////////////////////////////////////////////////")
+        print("--------------------------------------------------")
+
