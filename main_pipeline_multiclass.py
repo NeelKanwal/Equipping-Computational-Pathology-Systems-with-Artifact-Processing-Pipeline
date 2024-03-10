@@ -14,8 +14,8 @@ if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import os
 
-    vipshome = '/nfs/student/neel/full_artifact_pipeline/vips-dev-8.12/bin/'
-    # vipshome = '/nfs/student/neel/full_artifact_pipeline/vips-dev-8.11/bin/'
+    vipshome = 'path_to/full_artifact_pipeline/vips-dev-8.12/bin/'
+    # vipshome = 'path_to//full_artifact_pipeline/vips-dev-8.11/bin/'
     os.environ['PATH'] = vipshome + ';' + os.environ['PATH']
     import pyvips as vips
     import openslide
@@ -54,13 +54,13 @@ if __name__ == '__main__':
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
 
     # Loading directory
-    # wsi_dir ="/nfs/student/neel/full_artifact_pipeline/new_WSIs/"
-    wsi_dir = "/nfs/student/neel/INCLIVA_WSIs/"
+    # wsi_dir ="path_to//full_artifact_pipeline/new_WSIs/"
+    wsi_dir = "path_to//INCLIVA_WSIs/"
 
     # Saving directory
     save_dir = wsi_dir
 
-    models_location = "/nfs/student/neel/full_artifact_pipeline/model_weights/"
+    models_location = "path_to//full_artifact_pipeline/model_weights/"
 
     # CNN Models Weights =
     multiclass_vit = "multiclass_vit.dat"
