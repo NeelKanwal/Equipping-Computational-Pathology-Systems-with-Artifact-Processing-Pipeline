@@ -80,7 +80,7 @@ for dirs in find_directories(path):
     models_location = "path_to/full_artifact_pipeline/model_weights/"
     
     choose_model = "cnns" # "vits", "cnns"
-    evaluate_with_prob = 0.327 # Use this probablity for thresholding, 
+    evaluate_with_prob = 0.326 # Use this probablity for thresholding, 
     #set to None for not using this feature
     ## Ensemble CNN = 0.326
     ## Ensemble ViTs = 0.052
