@@ -44,7 +44,7 @@ if __name__ == "__main__":
     import torchvision.transforms as transforms
 
     from torch import nn
-    from utils import make_cm, make_pretty_cm, infer_vit_v3, infer_cnn_v3, load_cnn_model, load_vit_model , plot_roc_curve_v4
+    from utils import make_cm, make_pretty_cm, infer_vit_v3, infer_cnn_v4, load_cnn_model, load_vit_model , plot_roc_curve_v4
     from sklearn.metrics import confusion_matrix, classification_report, matthews_corrcoef, roc_auc_score, precision_score, accuracy_score, f1_score
     from scikitplot.metrics import plot_roc, plot_precision_recall 
     import timm
@@ -152,7 +152,7 @@ if __name__ == "__main__":
 
     file_names = [im[0].split("/")[-1] for im in val_loader.dataset.imgs]
 
-    data = {"files": file_names, "ground_truth": y_true, "predicted_artifact": artifact_list, "blood": blood_pred,  "blur": blur_pred, 
+    data = {"files": file_names, "ground_truth": y_true, "predicted": artifact_list, "blood": blood_pred,  "blur": blur_pred, 
             "bubble": airbubble_pred, "damage": damaged_pred, "fold": fold_pred, "blood_p": blood_prob, "blur_p": blur_prob, "bubble_p": airbubble_prob,
             "damage_p": damaged_prob, "fold_p": fold_prob}
 
@@ -230,11 +230,11 @@ if __name__ == "__main__":
     print("--------------Test Set-------------------------")
 
     if ensemble == "cnns":    
-        blur_pred, y_true, blur_prob = infer_cnn_v3(blur_model, test_loader, use_prob_threshold=evaluate_with_prob)
-        blood_pred, y_true1, blood_prob= infer_cnn_v3(blood_model, test_loader, use_prob_threshold=evaluate_with_prob)
-        damaged_pred, y_true2, damaged_prob = infer_cnn_v3(damaged_model, test_loader, use_prob_threshold=evaluate_with_prob)
-        fold_pred, y_true, fold_prob = infer_cnn_v3(fold_model, test_loader, use_prob_threshold=evaluate_with_prob)
-        airbubble_pred, y_true, airbubble_prob = infer_cnn_v3(airbubble_model, test_loader, use_prob_threshold=evaluate_with_prob) # use_prob_threshold
+        blur_pred, y_true, blur_prob = infer_cnn_v4(blur_model, test_loader, use_prob_threshold=evaluate_with_prob)
+        blood_pred, y_true1, blood_prob= infer_cnn_v4(blood_model, test_loader, use_prob_threshold=evaluate_with_prob)
+        damaged_pred, y_true2, damaged_prob = infer_cnn_v4(damaged_model, test_loader, use_prob_threshold=evaluate_with_prob)
+        fold_pred, y_true, fold_prob = infer_cnn_v4(fold_model, test_loader, use_prob_threshold=evaluate_with_prob)
+        airbubble_pred, y_true, airbubble_prob = infer_cnn_v4(airbubble_model, test_loader, use_prob_threshold=evaluate_with_prob) # use_prob_threshold
     else:
         blur_pred, y_true, blur_prob = infer_vit_v3(blur_model, test_loader, use_prob_threshold=evaluate_with_prob)
         blood_pred, y_true1, blood_prob = infer_vit_v3(blood_model, test_loader, use_prob_threshold=evaluate_with_prob)
