@@ -13,6 +13,7 @@ An overview figure from the paper:
 
 
 
+
 # Requirements
 - Histolab
 - Pytorch
@@ -35,7 +36,9 @@ This work only uses D40x for training and development.
 
 <img width="354" alt="image" src="https://github.com/NeelKanwal/Equipping-Computational-Pathology-Systems-with-Artifact-Processing-Pipeline/assets/52494244/40bd42ee-8aff-4990-8160-a63e68580fac">
 
+
 <img width="379" alt="image" src="https://github.com/NeelKanwal/Equipping-Computational-Pathology-Systems-with-Artifact-Processing-Pipeline/assets/52494244/e6b621a3-a7bc-4cae-9aa8-a0a7b563a4a4">
+
 
 
 - To process your own WSIs for preparing a dataset, use files in the preprocess directory.
@@ -46,7 +49,9 @@ This work only uses D40x for training and development.
 <img width="341" alt="image" src="https://github.com/NeelKanwal/Equipping-Computational-Pathology-Systems-with-Artifact-Processing-Pipeline/assets/52494244/0eabba34-4c5d-4b55-a907-356fc4ab3f46">
 
 
+
 <img width="411" alt="image" src="https://github.com/NeelKanwal/Equipping-Computational-Pathology-Systems-with-Artifact-Processing-Pipeline/assets/52494244/a694aa8f-7183-46a9-8388-38dd55d9b617">
+
 
 # Cite
 ```
