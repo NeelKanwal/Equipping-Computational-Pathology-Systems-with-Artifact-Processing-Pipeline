@@ -9,10 +9,7 @@ Link to preprint: https://arxiv.org/abs/2403.07743
 
 An overview figure from the paper:
 
-<img width="331" alt="image" src="https://github.com/NeelKanwal/Equipping-Computational-Pathology-Systems-with-Artifact-Processing-Pipeline/assets/52494244/5669799b-2a5b-40f0-9bac-8dbbe9b4c87f">
-
-
-
+<img width="429" alt="image" src="https://github.com/NeelKanwal/Equipping-Computational-Pathology-Systems-with-Artifact-Processing-Pipeline/assets/52494244/1b61a0f1-8b43-49dc-a3be-a48af10b1fe0">
 
 # Requirements
 - Histolab
