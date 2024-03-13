@@ -11,6 +11,8 @@ An overview figure from the paper:
 
 <img width="331" alt="image" src="https://github.com/NeelKanwal/Equipping-Computational-Pathology-Systems-with-Artifact-Processing-Pipeline/assets/52494244/5669799b-2a5b-40f0-9bac-8dbbe9b4c87f">
 
+
+
 # Requirements
 - Histolab
 - Pytorch
@@ -47,7 +49,7 @@ This work only uses D40x for training and development.
 <img width="411" alt="image" src="https://github.com/NeelKanwal/Equipping-Computational-Pathology-Systems-with-Artifact-Processing-Pipeline/assets/52494244/a694aa8f-7183-46a9-8388-38dd55d9b617">
 
 # Cite
-"""
+""
 @misc{kanwal2024equipping,
     title={Equipping Computational Pathology Systems with Artifact Processing Pipelines: A Showcase for Computation and Performance Trade-offs},
     author={Neel Kanwal and Farbod Khoraminia and Umay Kiraz and Andres Mosquera-Zamudio and Carlos Monteagudo and Emiel A. M. Janssen and Tahlita C. M. Zuiverloon and Chunmig Rong and Kjersti Engan},
@@ -56,4 +58,4 @@ This work only uses D40x for training and development.
     archivePrefix={arXiv},
     primaryClass={eess.IV}
 }
-"""
+""
