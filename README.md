@@ -30,6 +30,32 @@ The dataset is publicaly available at Zenodo. https://zenodo.org/records/1080944
 
 This work only uses D40x for training and development. 
 
+```
+- D40x\path_to_dataset\
+      - training
+            -- artifact_free
+            -- blood
+            -- blur
+            -- air bubbles
+            -- damaged tissue
+            -- folded tissue
+      - validation
+            -- artifact_free
+            -- blood
+            -- blur
+            -- air bubbles
+            -- damaged tissue
+            -- folded tissue
+       - test
+            -- artifact_free
+            -- blood
+            -- blur
+            -- air bubbles
+            -- damaged tissue
+            -- folded tissue
+```
+
+
 
 <img width="354" alt="image" src="https://github.com/NeelKanwal/Equipping-Computational-Pathology-Systems-with-Artifact-Processing-Pipeline/assets/52494244/40bd42ee-8aff-4990-8160-a63e68580fac">
 
@@ -61,3 +87,8 @@ This work only uses D40x for training and development.
     primaryClass={eess.IV}
 }
 ```
+
+Other works on HistoArtifact datasets:
+1. Vision-Transformers-for-Small-Histological-Datasets-Learned-Through-Knowledge-Distillation : https://github.com/NeelKanwal/Vision-Transformers-for-Small-Histological-Datasets-Learned-Through-Knowledge-Distillation
+2. Quantifying-the-effect-of-color-processing-on-blood-and-damaged-tissue-detection: https://github.com/NeelKanwal/Quantifying-the-effect-of-color-processing-on-blood-and-damaged-tissue-detection
+3. Are you sure it’s an artifact? Artifact detection and uncertainty quantification in histological images: https://github.com/NeelKanwal/DeepKernelLearning
