@@ -67,6 +67,9 @@ This work only uses D40x for training and development.
 - To process your own WSIs for preparing a dataset, use files in the preprocess directory.
 - Link to the publicly available processed dataset: TBA
 
+# The proposed MoE approach 
+<img width="292" alt="image" src="https://github.com/NeelKanwal/Equipping-Computational-Pathology-Systems-with-Artifact-Processing-Pipeline/assets/52494244/d53394a2-2e05-4339-9ccf-d56d14388b57">
+
 # Results
 
 <img width="341" alt="image" src="https://github.com/NeelKanwal/Equipping-Computational-Pathology-Systems-with-Artifact-Processing-Pipeline/assets/52494244/0eabba34-4c5d-4b55-a907-356fc4ab3f46">
