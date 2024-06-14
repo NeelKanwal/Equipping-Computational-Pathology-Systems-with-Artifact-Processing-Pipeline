@@ -54,8 +54,8 @@ This work only uses D40x for training and development.
             -- damaged tissue
             -- folded tissue
 ```
-#Model weights
-Model weights can be downloaded from Google drive or the model_weights directory: https://drive.google.com/drive/folders/12p6dyHOHvr9Yg36R0XFjKE0X-Tn3Qqfl?usp=sharing
+# Model weights
+Model weights can be downloaded from the model_weights directory or Google drive: https://drive.google.com/drive/folders/12p6dyHOHvr9Yg36R0XFjKE0X-Tn3Qqfl?usp=sharing
 
 
 <img width="354" alt="image" src="https://github.com/NeelKanwal/Equipping-Computational-Pathology-Systems-with-Artifact-Processing-Pipeline/assets/52494244/40bd42ee-8aff-4990-8160-a63e68580fac">
