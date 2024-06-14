@@ -26,7 +26,7 @@ Use requirement.txt for complete packages.
 
 # Dataset 
 
-The dataset is publicaly available at Zenodo. https://zenodo.org/records/10809442.
+The dataset is publicly available at Zenodo. https://zenodo.org/records/10809442.
 
 This work only uses D40x for training and development. 
 
@@ -54,7 +54,8 @@ This work only uses D40x for training and development.
             -- damaged tissue
             -- folded tissue
 ```
-
+#Model weights
+Model weights can be downloaded from Google drive or the model_weights directory: https://drive.google.com/drive/folders/12p6dyHOHvr9Yg36R0XFjKE0X-Tn3Qqfl?usp=sharing
 
 
 <img width="354" alt="image" src="https://github.com/NeelKanwal/Equipping-Computational-Pathology-Systems-with-Artifact-Processing-Pipeline/assets/52494244/40bd42ee-8aff-4990-8160-a63e68580fac">
@@ -64,7 +65,7 @@ This work only uses D40x for training and development.
 
 
 
-- To process your own WSIs for preparing a dataset, use files in the preprocess directory.
+- To process your WSIs for preparing a dataset, use files in the preprocess directory.
 - Link to the publicly available processed dataset: TBA
 
 # The proposed MoE approach 
